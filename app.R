@@ -408,7 +408,5 @@ server <- function(input, output, session) {
 
 }
 
-setwd("/Users/ayushdesai/Documents/Data Science/Machine Learning 2/ds4420_ml2_project")
-shinylive::export(appdir = "shiny_deploy", destdir = "docs")
 shinyApp(ui, server)
 
