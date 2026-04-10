@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 
 ```{r packages}
 library(shiny)
+shinylive::export(appdir = ".", destdir = "docs")
 library(rstanarm)
 library(tidyverse)
 library(bayesplot)
