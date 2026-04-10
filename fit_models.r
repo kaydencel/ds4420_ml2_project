@@ -1,8 +1,6 @@
 library(rstanarm)
 library(tidyverse)
 
-setwd("/Users/ayushdesai/Documents/Data\ Science/Machine\ Learning\ 2/ds4420_ml2_project/") 
-
 options(mc.cores = parallel::detectCores())
 
 df <- read_csv("airbnb_clean.csv") %>%
