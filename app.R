@@ -1,6 +1,18 @@
-library(shiny)
-library(tidyverse)
+options(
+  shinylive.packages = c("munsell")
+)
+library(munsell)
+library(colorspace)
+library(scales)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(readr)
+library(tibble)
+library(tidyr)
 library(DT)
+library(shiny)
+library(bslib)
 
 # ── Load pre-computed data ────────────────────────────────────────────────────
 price_data      <- readRDS("price_model_data.rds")
@@ -396,6 +408,7 @@ server <- function(input, output, session) {
 
 }
 
-shinylive::export(appdir = ".", destdir = "docs")
+setwd("/Users/ayushdesai/Documents/Data Science/Machine Learning 2/ds4420_ml2_project")
+shinylive::export(appdir = "shiny_deploy", destdir = "docs")
 shinyApp(ui, server)
 
