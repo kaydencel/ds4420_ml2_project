@@ -2,3 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
+docs/app.json
+data/airbnb_clean.csv
