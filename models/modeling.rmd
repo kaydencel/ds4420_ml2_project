@@ -1,0 +1,75 @@
+---
+title: "Airbnb Bayesian Modeling"
+author: "Ayush Desai"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r packages}
+library(rstanarm)
+library(tidyverse)
+library(bayesplot)
+
+options(mc.cores = parallel::detectCores())
+```
+
+```{r load-data}
+df <- read_csv("../data/airbnb_clean.csv") %>%
+  mutate(
+    price_num    = as.numeric(str_replace_all(price, "[$,]", "")),
+    log_price    = log(price_num),
+    borough      = factor(neighbourhood_group_cleansed),
+    room_type    = factor(room_type),
+
+    # Median log-price across all listings in the same neighbourhood
+    neigh_median_price = ave(
+      log(as.numeric(str_replace_all(price, "[$,]", ""))),
+      neighbourhood_cleansed,
+      FUN = function(x) median(x, na.rm = TRUE)
+    ),
+
+    price_vs_neigh = log_price - neigh_median_price,
+
+    # Ghost flag: highly available but rarely reviewed, OR zero reviews + large host
+    ghost = case_when(
+      availability_365 > 300 & (is.na(reviews_per_month) | reviews_per_month < 0.1) ~ 1L,
+      reviews_per_month == 0 & calculated_host_listings_count > 3 ~ 1L,
+      TRUE ~ 0L
+    ),
+
+    # Log-transform skewed count variables to reduce leverage
+    log_reviews    = log1p(number_of_reviews),
+    log_host_count = log1p(calculated_host_listings_count),
+
+    review_complete = rowMeans(
+      select(., review_scores_rating, review_scores_cleanliness,
+             review_scores_communication, review_scores_location,
+             review_scores_value),
+      na.rm = TRUE
+    )
+  ) %>%
+  filter(!is.na(log_price), price_num > 10, price_num < 2000,
+         !is.na(accommodates), !is.na(number_of_reviews))
+```
+
+```{r fit-models}
+price_model <- readRDS("price_model.rds")
+ghost_model <- readRDS("ghost_model.rds")
+
+# Attach each listing's posterior mean ghost probability for the table and plots
+ghost_vars <- c("ghost", "borough", "room_type", "accommodates",
+                "log_host_count", "price_vs_neigh", "review_complete", "log_reviews")
+df_ghost <- df %>% drop_na(all_of(ghost_vars))
+df_ghost$ghost_prob <- colMeans(posterior_epred(ghost_model))
+
+# Borough-level median log-prices used as the baseline in price prediction
+boroughs        <- levels(df$borough)
+room_types      <- levels(df$room_type)
+borough_medians <- df %>%
+  group_by(borough) %>%
+  summarise(med = median(neigh_median_price, na.rm = TRUE), .groups = "drop")
+```
