@@ -1,0 +1,105 @@
+---
+title: "DS 4420 ML2 Project: Bayesian Model"
+author: "Ayush Desai and Kaydence Lin"
+output: html_document
+date: "2026-04-15"
+---
+
+```{r}
+library(brms)
+library(tidyverse)
+```
+
+Load Data
+```{r}
+airbnb <- read.csv("../data/airbnb_clean.csv") |>
+  mutate(
+    borough = factor(neighbourhood_group_cleansed),
+    room_type = factor(room_type)
+  )
+head(airbnb)
+```
+
+```{r}
+normal_prior <- c(
+  prior(normal(0, 1), class = b),
+  prior(normal(0, 2.5), class = Intercept)
+)
+
+airbnb_brm_normal <- brm(ghost_label ~ 
+                      availability_365 + minimum_nights + host_has_profile_pic + 
+                      host_identity_verified + host_listings_count + 
+                      days_since_last_review + reviews_per_month + price,                       
+                      family = bernoulli("logit"),  # Bernoulli likelihood
+                      data = airbnb,
+                      chains = 4,
+                      iter = 2000,
+                      warmup = 1000,
+                      prior = normal_prior)  # Normal priors on coefficients
+
+summary(airbnb_brm_normal)
+
+```
+
+```{r}
+plot(airbnb_brm_normal)
+```
+
+Posterior predictive distribution
+```{r}
+post_preds <- posterior_predict(airbnb_brm_normal)
+head(post_preds[,1:10])
+```
+
+```{r}
+ghost_post_preds <- post_preds[,1]
+hist(ghost_post_preds)
+mean(ghost_post_preds)
+airbnb$ghost_label[1]
+```
+
+```{r}
+post_draws <- as.data.frame(airbnb_brm_normal)
+
+sigmoid <- function(w, x){
+  1/(1 + exp(-t(w)%*%x))
+}
+
+listing_x <- as.matrix(c(1, unlist(airbnb[1, c("availability_365", "minimum_nights", 
+                                                 "host_has_profile_pic", "host_identity_verified",
+                                                 "host_listings_count", "days_since_last_review",
+                                                 "reviews_per_month", "price")])), ncol = 1)
+
+# Loop through posterior draws
+post_sigmoids <- c()
+for(i in 1:nrow(post_draws)){
+  w_tilde <- matrix(unlist(post_draws[i, 1:9]), ncol = 1)  # 9 = intercept + 8 predictors
+  post_sigmoids <- c(post_sigmoids, sigmoid(w_tilde, listing_x))
+}
+
+hist(post_sigmoids, main = "Posterior Probability: Listing 1 is a Ghost",
+     xlab = "Probability")
+mean(post_sigmoids)
+airbnb$ghost_label[1]
+
+```
+
+```{r}
+# Effect of individual predictors
+plot(conditional_effects(airbnb_brm_normal, "availability_365"))
+plot(conditional_effects(airbnb_brm_normal, "days_since_last_review"))
+plot(conditional_effects(airbnb_brm_normal, "price"))
+
+# Joint effects
+plot(conditional_effects(airbnb_brm_normal, "availability_365:minimum_nights"))
+plot(conditional_effects(airbnb_brm_normal, "days_since_last_review:reviews_per_month"))
+```
+
+
+```{r}
+colnames(post_draws)
+```
+
+
+
+
