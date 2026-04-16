@@ -8,6 +8,7 @@ date: "2026-04-15"
 ```{r}
 library(brms)
 library(tidyverse)
+library(caret)
 ```
 
 Load Data
@@ -30,15 +31,16 @@ airbnb_brm_normal <- brm(ghost_label ~
                       availability_365 + minimum_nights + host_has_profile_pic + 
                       host_identity_verified + host_listings_count + 
                       days_since_last_review + reviews_per_month + price,                       
-                      family = bernoulli("logit"),  # Bernoulli likelihood
+                      family = bernoulli("logit"),  
                       data = airbnb,
                       chains = 4,
                       iter = 2000,
                       warmup = 1000,
-                      prior = normal_prior)  # Normal priors on coefficients
+                      prior = normal_prior)  
+```
 
+```{r}
 summary(airbnb_brm_normal)
-
 ```
 
 ```{r}
@@ -97,7 +99,31 @@ plot(conditional_effects(airbnb_brm_normal, "days_since_last_review:reviews_per_
 
 
 ```{r}
-colnames(post_draws)
+complete_rows <- complete.cases(airbnb[, c("ghost_label", "availability_365", "minimum_nights",
+                                           "host_has_profile_pic", "host_identity_verified",
+                                           "host_listings_count", "days_since_last_review",
+                                           "reviews_per_month", "price")])
+
+airbnb_clean <- airbnb[complete_rows, ]
+
+pred_probs <- posterior_epred(airbnb_brm_normal) |> colMeans()
+pred_labels <- ifelse(pred_probs > 0.5, 1, 0)
+actual <- airbnb_clean$ghost_label
+
+cat("pred_labels length:", length(pred_labels), "\n")
+cat("actual length:", length(actual), "\n")
+
+conf_mat <- confusionMatrix(factor(pred_labels), factor(actual), positive = "1")
+print(conf_mat)
+
+accuracy  <- conf_mat$overall["Accuracy"]
+precision <- conf_mat$byClass["Precision"]
+recall    <- conf_mat$byClass["Recall"]
+f1        <- conf_mat$byClass["F1"]
+```
+
+```{r}
+bayes_R2(airbnb_brm_normal)
 ```
 
 
