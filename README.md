@@ -10,7 +10,7 @@ The app has two models. The Check a Listing tab runs a logistic regression that 
 
 **Data**
 
-Sourced from Inside Airbnb, a public repository of scraped NYC Airbnb listings (November 2025 snapshot). Listings filtered to $10–$2,000/night.
+Sourced from Inside Airbnb, a public repository of scraped NYC Airbnb listings (November 2025 snapshot). 
 
 **Live App**
 
