@@ -4,3 +4,5 @@
 .Ruserdata
 docs/app.json
 data/airbnb_clean.csv
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/

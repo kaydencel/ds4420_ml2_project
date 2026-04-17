@@ -7,18 +7,19 @@ library(tibble)
 library(tidyr)
 library(DT)
 library(shiny)
+library(MASS)
 
 # generate model files on first launch, cached on subsequent runs
 local({
-  rds <- c("../data/ghost_model_data.rds", "../data/factor_levels.rds")
+  rds <- c("data/ghost_model_data.rds", "data/factor_levels.rds")
   if (all(file.exists(rds))) return(invisible(NULL))
 
   message("Building model cache...")
 
-  raw <- read_csv("../data/airbnb_clean.csv",
+  raw <- read_csv("data/airbnb_clean.csv",
                   col_types = cols(id = col_character()),
                   show_col_types = FALSE) |>
-    select(-1) |>
+    dplyr::select(-1) |>
     mutate(
       price_num = as.numeric(gsub("[$,]", "", price)),
       last_review = as.Date(last_review),
@@ -61,28 +62,28 @@ local({
   set.seed(42)
   drw_g <- MASS::mvrnorm(4000, coef(fit_g), vcov(fit_g))
   ci_g <- t(apply(drw_g, 2, quantile, probs = c(0.025, 0.975)))
-  saveRDS(list(draws = drw_g, ci = ci_g), "../data/ghost_model_data.rds")
+  saveRDS(list(draws = drw_g, ci = ci_g), "data/ghost_model_data.rds")
 
   saveRDS(list(boroughs = levels(df_g$borough),
                room_types = levels(df_g$room_type_f)),
-          "../data/factor_levels.rds")
+          "data/factor_levels.rds")
   message("Model cache written.")
 })
 
 # load model data
-ghost_data <- readRDS("../data/ghost_model_data.rds")
-fl <- readRDS("../data/factor_levels.rds")
+ghost_data <- readRDS("data/ghost_model_data.rds")
+fl <- readRDS("data/factor_levels.rds")
 boroughs <- fl$boroughs
 room_types <- fl$room_types
 
 # load MLP predictions joined with listing metadata
-mlp_preds <- read_csv("../data/mlp_ghost_predictions.csv",
+mlp_preds <- read_csv("data/mlp_ghost_predictions.csv",
                       col_types = cols(id = col_character()),
                       show_col_types = FALSE)
-listings <- read_csv("../data/airbnb_clean.csv",
+listings <- read_csv("data/airbnb_clean.csv",
                      col_types = cols(id = col_character()),
                      show_col_types = FALSE) |>
-  select(-1)
+  dplyr::select(-1)
 
 df_ghost <- listings |>
   mutate(price_num = as.numeric(gsub("[$,]", "", price))) |>
@@ -112,35 +113,146 @@ predict_ghost <- function(x) {
 
 # css
 app_css <- "
-body { font-family: 'Georgia', serif; background: #f4f4f4; color: #1a1a1a; margin: 0; padding: 0; }
-.navbar { background-color: #1a1a2e !important; border: none; border-radius: 0; margin-bottom: 0; }
-.navbar-brand, .navbar-nav > li > a { color: #e8e8e8 !important; font-family: 'Georgia', serif; font-size: 14px; letter-spacing: 0.03em; }
-.navbar-nav > li > a:hover, .navbar-nav > .active > a,
-.navbar-nav > .active > a:focus, .navbar-nav > .active > a:hover {
-  background-color: #2c2c54 !important; color: #ffffff !important; }
-.tab-content { overflow-y: auto; min-height: 0; background: #f4f4f4; }
-.tab-pane { padding: 20px 24px 40px 24px; }
-.stat-box { background: #fff; border-left: 4px solid #1a1a2e; padding: 14px 18px; margin-bottom: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-.stat-box .stat-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.09em; color: #777; margin: 0 0 4px 0; font-family: 'Helvetica Neue', Arial, sans-serif; }
-.stat-box .stat-value { font-size: 1.7em; font-weight: bold; margin: 0; color: #1a1a2e; line-height: 1.2; }
-.section-title { font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.12em; color: #666; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin: 18px 0 10px 0; font-family: 'Helvetica Neue', Arial, sans-serif; }
-.well { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); padding: 16px; }
-.form-control, .selectize-input { border-radius: 3px !important; border: 1px solid #ccc !important; font-size: 13px !important; }
-label { font-size: 12px; font-weight: 600; color: #444; letter-spacing: 0.02em; font-family: 'Helvetica Neue', Arial, sans-serif; }
-.irs--shiny .irs-bar, .irs--shiny .irs-single { background: #1a1a2e !important; border-color: #1a1a2e !important; }
-.irs--shiny .irs-handle { border-color: #1a1a2e !important; }
-.btn-run { width: 100%; background-color: #1a1a2e; color: white; border: none; padding: 9px 0; border-radius: 4px; font-size: 13px; font-family: 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.05em; cursor: pointer; transition: background 0.2s; }
-.btn-run:hover { background-color: #2c2c54; color: white; }
-.plot-panel { background: #fff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 16px 18px 10px 18px; margin-bottom: 16px; }
-.overview-section { max-width: 820px; margin: 0 auto; padding: 10px 0 30px 0; line-height: 1.8; }
-.overview-section h4 { color: #1a1a2e; border-bottom: 2px solid #1a1a2e; padding-bottom: 5px; margin-top: 24px; font-size: 1.05em; letter-spacing: 0.02em; }
-.overview-section p, .overview-section li { font-size: 0.95em; color: #333; }
-.dataTables_wrapper { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: #f5f3ee;
+  color: #1c2434;
+  margin: 0; padding: 0;
+}
+.navbar {
+  background-color: #1f2d3d !important;
+  border: none; border-radius: 0; margin-bottom: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+.navbar-brand {
+  color: #edeae2 !important;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+.navbar-nav > li > a {
+  color: #a8b4be !important;
+  font-size: 13.5px;
+  letter-spacing: 0.01em;
+}
+.navbar-nav > li > a:hover,
+.navbar-nav > .active > a,
+.navbar-nav > .active > a:focus,
+.navbar-nav > .active > a:hover {
+  background-color: rgba(255,255,255,0.07) !important;
+  color: #edeae2 !important;
+}
+.tab-content { background: #f5f3ee; }
+.tab-pane { padding: 28px 28px 52px 28px; }
+.stat-box {
+  background: #fff;
+  border-left: 3px solid #2e5b8a;
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.stat-box .stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #8a9299;
+  margin: 0 0 6px 0;
+}
+.stat-box .stat-value {
+  font-size: 1.8em;
+  font-weight: 600;
+  margin: 0;
+  color: #1c2434;
+  line-height: 1.2;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #9aa4ae;
+  border-bottom: 1px solid #e6e1d8;
+  padding-bottom: 7px;
+  margin: 0 0 14px 0;
+}
+.well {
+  background-color: #fff;
+  border: 1px solid #e6e1d8;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  padding: 20px;
+}
+.form-control, .selectize-input {
+  border-radius: 4px !important;
+  border: 1px solid #d5cfc5 !important;
+  font-size: 13px !important;
+  background: #faf9f6 !important;
+}
+label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5568;
+  letter-spacing: 0.01em;
+}
+.irs--shiny .irs-bar, .irs--shiny .irs-single {
+  background: #2e5b8a !important;
+  border-color: #2e5b8a !important;
+}
+.irs--shiny .irs-handle { border-color: #2e5b8a !important; }
+.btn-run {
+  width: 100%;
+  background-color: #1f2d3d;
+  color: #edeae2;
+  border: none;
+  padding: 10px 0;
+  border-radius: 4px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-run:hover { background-color: #2e5b8a; color: #fff; }
+.plot-panel {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  padding: 20px 22px 14px 22px;
+  margin-bottom: 16px;
+}
+.overview-section {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 0 44px 0;
+  line-height: 1.78;
+}
+.overview-section h4 {
+  color: #1c2434;
+  border-bottom: 1px solid #e6e1d8;
+  padding-bottom: 6px;
+  margin-top: 28px;
+  font-size: 1em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.overview-section p, .overview-section li {
+  font-size: 0.93em;
+  color: #3a4450;
+}
+.dataTables_wrapper { font-size: 13px; }
+table.dataTable thead th {
+  background: #f5f3ee;
+  color: #4a5568;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid #e6e1d8 !important;
+}
 "
 
 # ui
 ui <- navbarPage(
-  title = "NYC Airbnb — Ghost Listing Detection",
+  title = "NYC Airbnb Ghost Listings",
   windowTitle = "NYC Airbnb Ghost Listings",
   header = tags$head(tags$style(HTML(app_css))),
 
@@ -165,16 +277,14 @@ ui <- navbarPage(
         h4("How the Models Work"),
         p("Two models are used in this application:"),
         tags$ul(
-          tags$li(tags$b("Ghost Model (Bayesian Logistic): "),
-            "Predicts ghost probability from borough, room type, host listing count,
-            review score, and review count. Uses weakly informative priors —
-            normal(0, 1) on coefficients and normal(0, 2.5) on the intercept.
-            Powers the Ghost Detection tab."),
-          tags$li(tags$b("Ghost Classifier (MLP): "),
-            "A four-layer neural network (128 → 64 → 32 → 1 nodes) with ReLU activations,
-            30% dropout, and cosine learning rate decay. Trained on 14,990 listings.
-            Achieves 82.5% accuracy, 73.9% recall, 58.1% precision, and 0.876 AUC.
-            Powers the Flagged Listings tab.")
+          tags$li(tags$b("Ghost Risk Model: "),
+            "A statistical model that estimates the likelihood a listing is a ghost based on
+            borough, room type, number of host listings, review score, and review count.
+            It produces a probability with a built-in measure of uncertainty."),
+          tags$li(tags$b("Ghost Classifier (Neural Network): "),
+            "A neural network trained on 14,990 listings that classifies listings as ghost
+            or active. It achieves 82.5% accuracy, correctly identifies 73.9% of ghost listings,
+            and has an overall predictive quality score (AUC) of 0.876.")
         ),
         h4("Data Source"),
         p("Data sourced from ",
@@ -188,38 +298,34 @@ ui <- navbarPage(
     ))
   ),
 
-  tabPanel("Ghost Detection",
+  tabPanel("Check a Listing",
     sidebarLayout(
       sidebarPanel(width = 3,
-        div(class = "section-title", "Listing Parameters"),
+        div(class = "section-title", "Listing Details"),
         selectInput("ghost_borough", "Borough", choices = boroughs, selected = "Manhattan"),
         selectInput("room_type_ghost", "Room Type", choices = room_types, selected = "Entire home/apt"),
         sliderInput("ghost_accommodates", "Guests", min = 1, max = 16, value = 2, step = 1),
-        sliderInput("host_listings", "Host Listing Count", min = 1, max = 100, value = 1, step = 1),
-        sliderInput("ghost_review_score", "Avg Review Score", min = 1, max = 5, value = 4.5, step = 0.1),
+        sliderInput("host_listings", "Host's Total Listings", min = 1, max = 100, value = 1, step = 1),
+        sliderInput("ghost_review_score", "Review Score (out of 5)", min = 1, max = 5, value = 4.5, step = 0.1),
         sliderInput("ghost_n_reviews", "Number of Reviews", min = 0, max = 500, value = 10, step = 5),
         br(),
-        actionButton("predict_ghost", "Run Prediction", class = "btn-run")
+        actionButton("predict_ghost", "Estimate Ghost Risk", class = "btn-run")
       ),
       mainPanel(width = 9,
-        uiOutput("ghost_prob_card"),
-        div(class = "plot-panel",
-          div(class = "section-title", "95% Credible Intervals — Ghost Predictors"),
-          plotOutput("ghost_coef_plot", height = "300px")
-        )
+        uiOutput("ghost_prob_card")
       )
     )
   ),
 
-  tabPanel("MLP Performance",
+  tabPanel("Model Performance",
     br(),
     fluidRow(column(10, offset = 1,
       div(class = "plot-panel",
-        div(class = "section-title", "Training Curve, ROC, Precision-Recall & Score Distribution"),
+        div(class = "section-title", "Model Training & Accuracy"),
         img(src = "mlp_diagnostics.png", width = "100%", style = "border-radius:4px;")
       ),
       div(class = "plot-panel",
-        div(class = "section-title", "Confusion Matrix (threshold = 0.747)"),
+        div(class = "section-title", "Prediction Results"),
         img(src = "mlp_confusion_matrix.png", width = "40%",
             style = "display:block; margin:0 auto; border-radius:4px;")
       )
@@ -234,14 +340,10 @@ ui <- navbarPage(
           div(class = "section-title", "Filters"),
           selectInput("tbl_borough", "Borough",
                       choices = c("All", boroughs), selected = "All"),
-          sliderInput("tbl_prob_thresh", "Min MLP Ghost Probability",
+          sliderInput("tbl_prob_thresh", "Minimum Ghost Likelihood",
                       min = 0, max = 1, value = 0.5, step = 0.05),
           br(),
-          uiOutput("flag_count_card"),
-          br(),
-          downloadButton("dl_flagged", "Download CSV",
-                         style = "background-color:#1a1a2e; color:white; border:none;
-                                  border-radius:4px; padding:7px 14px; font-size:13px;")
+          uiOutput("flag_count_card")
         )
       ),
       column(9, DTOutput("ghost_table"))
@@ -275,43 +377,62 @@ server <- function(input, output, session) {
       style = paste0("border-left:5px solid ", border_col,
                      "; background:#fff; padding:16px 22px; border-radius:4px;",
                      "box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:16px;"),
-      p(style = "margin:0; font-size:0.72em; text-transform:uppercase;
-                 letter-spacing:0.09em; color:#777; font-family:'Helvetica Neue',Arial,sans-serif;",
-        "Posterior Ghost Probability"),
+      p(style = "margin:0; font-size:11px; text-transform:uppercase;
+                 letter-spacing:0.09em; color:#8a9299;",
+        "Ghost Risk Score"),
       p(style = paste0("margin:6px 0 4px 0; font-size:2.2em; font-weight:bold; color:",
                        border_col, "; line-height:1.1;"), pct),
-      p(style = "margin:0; font-size:0.88em; color:#555;
-                 font-family:'Helvetica Neue',Arial,sans-serif;", lbl)
+      p(style = "margin:0; font-size:0.88em; color:#5f6b7a;", lbl)
     )
   })
+
+  param_labels <- c(
+    boroughBronx             = "Borough: Bronx",
+    boroughBrooklyn          = "Borough: Brooklyn",
+    boroughManhattan         = "Borough: Manhattan",
+    boroughQueens            = "Borough: Queens",
+    "boroughStaten Island"   = "Borough: Staten Island",
+    "room_type_fHotel room"  = "Room Type: Hotel",
+    "room_type_fPrivate room"= "Room Type: Private Room",
+    "room_type_fShared room" = "Room Type: Shared Room",
+    accommodates             = "Guests Accommodated",
+    log_host_count           = "Host Listing Count",
+    review_complete          = "Review Score",
+    log_reviews              = "Number of Reviews"
+  )
 
   output$ghost_coef_plot <- renderPlot({
     tryCatch({
       as.data.frame(ghost_data$ci) %>%
         rownames_to_column("param") %>%
         filter(param != "(Intercept)") %>%
-        ggplot(aes(y = reorder(param, `97.5%`))) +
-        geom_segment(aes(x = `2.5%`, xend = `97.5%`, yend = param),
-                     linewidth = 1.2, color = "#1a1a2e") +
-        geom_point(aes(x = (`2.5%` + `97.5%`) / 2), size = 2.5, color = "#1a1a2e") +
-        geom_vline(xintercept = 0, linetype = "dashed", color = "#c0392b", linewidth = 0.7) +
-        labs(x = "Effect on log-odds of ghost", y = NULL) +
+        mutate(label = dplyr::coalesce(param_labels[param], param)) %>%
+        ggplot(aes(y = reorder(label, `97.5%`))) +
+        geom_segment(aes(x = `2.5%`, xend = `97.5%`, yend = reorder(label, `97.5%`)),
+                     linewidth = 1.4, color = "#2e5b8a", alpha = 0.85) +
+        geom_point(aes(x = (`2.5%` + `97.5%`) / 2), size = 3, color = "#1f2d3d") +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "#b83232", linewidth = 0.65) +
+        labs(x = "Effect on ghost risk  (right of zero = higher risk)", y = NULL) +
         theme_minimal(base_size = 11) +
-        theme(panel.grid.minor = element_blank(),
-              panel.grid.major.y = element_blank(),
-              panel.grid.major.x = element_line(color = "#eeeeee"),
-              axis.text.y = element_text(size = 10))
+        theme(
+          panel.grid.minor = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.major.x = element_line(color = "#ede9e0"),
+          axis.text.y = element_text(size = 10, color = "#3a4450"),
+          axis.title.x = element_text(size = 10, color = "#5f6b7a"),
+          plot.background = element_rect(fill = "#ffffff", color = NA)
+        )
     }, error = function(e) {
       ggplot() + annotate("text", x = 0.5, y = 0.5,
         label = paste("Plot unavailable:", conditionMessage(e)),
-        size = 4, color = "#c0392b") + theme_void()
+        size = 4, color = "#b83232") + theme_void()
     })
   }, res = 96)
 
   flagged_data <- reactive({
     d <- df_ghost %>%
       filter(ghost_prob > input$tbl_prob_thresh) %>%
-      select(
+      dplyr::select(
         id, name,
         borough = neighbourhood_group_cleansed,
         neighbourhood = neighbourhood_cleansed,
@@ -329,9 +450,8 @@ server <- function(input, output, session) {
     div(class = "stat-box",
       p(class = "stat-label", "Flagged Listings"),
       p(class = "stat-value", n),
-      p(style = "font-size:0.78em; color:#888; margin:4px 0 0 0;
-                 font-family:'Helvetica Neue',Arial,sans-serif;",
-        paste0("above ", scales::percent(input$tbl_prob_thresh, accuracy = 1), " threshold"))
+      p(style = "font-size:0.78em; color:#8a9299; margin:4px 0 0 0;",
+        paste0("above ", scales::percent(input$tbl_prob_thresh, accuracy = 1), " likelihood threshold"))
     )
   })
 
@@ -351,7 +471,7 @@ server <- function(input, output, session) {
         "Availability" = availability_365,
         "Reviews/mo" = reviews_per_month,
         "Total Reviews" = number_of_reviews,
-        "MLP Ghost Prob" = ghost_prob
+        "Ghost Likelihood" = ghost_prob
       )
   },
   options = list(pageLength = 15, scrollX = TRUE, dom = "frtip", autoWidth = TRUE),
