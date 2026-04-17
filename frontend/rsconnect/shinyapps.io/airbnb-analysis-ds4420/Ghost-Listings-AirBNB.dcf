@@ -5,7 +5,7 @@ account: airbnb-analysis-ds4420
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 17157477
-bundleId: 11863854
+bundleId: 11863932
 url: https://airbnb-analysis-ds4420.shinyapps.io/Ghost-Listings-AirBNB/
 version: 1
 asMultiple: FALSE
