@@ -5,7 +5,6 @@ library(stringr)
 library(readr)
 library(tibble)
 library(tidyr)
-library(DT)
 library(shiny)
 library(MASS)
 
@@ -76,20 +75,6 @@ fl <- readRDS("data/factor_levels.rds")
 boroughs <- fl$boroughs
 room_types <- fl$room_types
 
-# load MLP predictions joined with listing metadata
-mlp_preds <- read_csv("data/mlp_ghost_predictions.csv",
-                      col_types = cols(id = col_character()),
-                      show_col_types = FALSE)
-listings <- read_csv("data/airbnb_clean.csv",
-                     col_types = cols(id = col_character()),
-                     show_col_types = FALSE) |>
-  dplyr::select(-1)
-
-df_ghost <- listings |>
-  mutate(price_num = as.numeric(gsub("[$,]", "", price))) |>
-  inner_join(mlp_preds, by = "id") |>
-  rename(ghost_prob = ghost_prob_mlp)
-
 # build feature vector for ghost model
 make_ghost_x <- function(borough, room_type, accommodates, log_host_count,
                          review_complete, log_reviews) {
@@ -132,8 +117,9 @@ body {
 }
 .navbar-nav > li > a {
   color: #a8b4be !important;
-  font-size: 13.5px;
+  font-size: 15px;
   letter-spacing: 0.01em;
+  padding: 18px 18px;
 }
 .navbar-nav > li > a:hover,
 .navbar-nav > .active > a,
@@ -236,8 +222,9 @@ label {
   letter-spacing: 0.01em;
 }
 .overview-section p, .overview-section li {
-  font-size: 0.93em;
+  font-size: 1.05em;
   color: #3a4450;
+  line-height: 1.82;
 }
 .dataTables_wrapper { font-size: 13px; }
 table.dataTable thead th {
@@ -257,44 +244,21 @@ ui <- navbarPage(
   header = tags$head(tags$style(HTML(app_css))),
 
   tabPanel("Overview",
-    fluidRow(column(10, offset = 1,
+    fluidRow(column(8, offset = 2,
       div(class = "overview-section",
-        h4("What Are Ghost Listings?"),
-        p("A ", tags$b("ghost listing"),
-          " is an Airbnb property that appears active on the platform but shows little to
-          no genuine guest activity. Listings are flagged using a composite scoring heuristic
-          based on the following signals:"),
-        tags$ul(
-          tags$li("High availability (≥ 180 days/year)"),
-          tags$li("High minimum night requirement (≥ 180 nights)"),
-          tags$li("Long time since last review (≥ 180 days)"),
-          tags$li("Price in the bottom 5th percentile for their neighbourhood and room type"),
-          tags$li("Unverified host with no profile picture")
-        ),
-        p("Listings scoring above 2 of these 5 signals are labeled as ghost listings.
-          Ghost listings distort platform supply signals, may manipulate neighborhood
-          pricing benchmarks, and can represent fraudulent or inactive inventory."),
-        h4("How the Models Work"),
-        p("Two models are used in this application:"),
-        tags$ul(
-          tags$li(tags$b("Ghost Risk Model: "),
-            "A statistical model that estimates the likelihood a listing is a ghost based on
-            borough, room type, number of host listings, review score, and review count.
-            It produces a probability with a built-in measure of uncertainty."),
-          tags$li(tags$b("Ghost Classifier (Neural Network): "),
-            "A neural network trained on 14,990 listings that classifies listings as ghost
-            or active. It achieves 82.5% accuracy, correctly identifies 73.9% of ghost listings,
-            and has an overall predictive quality score (AUC) of 0.876.")
-        ),
-        h4("Data Source"),
-        p("Data sourced from ",
-          tags$a("Inside Airbnb", href = "http://insideairbnb.com", target = "_blank"),
-          ", a public repository of scraped NYC Airbnb listings. The raw dataset contains
-          36,353 New York City listings from November 2025. After filtering for complete
-          feature data, 21,415 listings were used for modeling, of which approximately
-          5% are flagged as ghost listings."),
-        p(tags$em("Note: data reflects a static snapshot and does not update in real-time."))
-      )
+        p("A ghost listing is an Airbnb property that appears active on the
+          platform but shows little to no genuine guest activity. Listings are flagged based on
+          signals like high availability, long gaps since the last review, unusually low pricing,
+          and unverified host identity. Listings that trigger enough of these signals are labeled
+          as ghost listings."),
+        p("Ghost listings distort platform supply, may manipulate neighborhood pricing benchmarks,
+          and can represent fraudulent or inactive inventory."),
+        p("This app uses two models. The ", tags$b("Check a Listing"), " tab runs a statistical
+          model that estimates ghost likelihood from listing characteristics. The ",
+          tags$b("Model Performance"), " tab shows evaluation results for a neural network
+          trained on 14,990 NYC listings, which achieves 82.5% accuracy and 0.876 AUC."),
+        p(style = "color: #9aa4ae; font-size: 0.88em;",
+          "Data source: Inside Airbnb | 36,353 New York City listings | Analysis based on November 2025 data"))
     ))
   ),
 
@@ -304,10 +268,16 @@ ui <- navbarPage(
         div(class = "section-title", "Listing Details"),
         selectInput("ghost_borough", "Borough", choices = boroughs, selected = "Manhattan"),
         selectInput("room_type_ghost", "Room Type", choices = room_types, selected = "Entire home/apt"),
-        sliderInput("ghost_accommodates", "Guests", min = 1, max = 16, value = 2, step = 1),
-        sliderInput("host_listings", "Host's Total Listings", min = 1, max = 100, value = 1, step = 1),
-        sliderInput("ghost_review_score", "Review Score (out of 5)", min = 1, max = 5, value = 4.5, step = 0.1),
-        sliderInput("ghost_n_reviews", "Number of Reviews", min = 0, max = 500, value = 10, step = 5),
+        selectInput("ghost_accommodates", "Guests",
+                    choices = as.character(1:10), selected = "2"),
+        selectInput("host_listings", "Host's Total Listings",
+                    choices = as.character(1:25), selected = "1"),
+        selectInput("ghost_review_score", "Review Score",
+                    choices = as.character(seq(1, 5, by = 0.5)), selected = "4.5"),
+        selectInput("ghost_n_reviews", "Number of Reviews",
+                    choices = c("0 -10" = "5", "11 -25" = "18", "26 -50" = "38",
+                                "51 -100" = "75", "101 -200" = "150", "201 -500" = "350"),
+                    selected = "18"),
         br(),
         actionButton("predict_ghost", "Estimate Ghost Risk", class = "btn-run")
       ),
@@ -332,23 +302,6 @@ ui <- navbarPage(
     ))
   ),
 
-  tabPanel("Flagged Listings",
-    br(),
-    fluidRow(
-      column(3,
-        div(class = "well",
-          div(class = "section-title", "Filters"),
-          selectInput("tbl_borough", "Borough",
-                      choices = c("All", boroughs), selected = "All"),
-          sliderInput("tbl_prob_thresh", "Minimum Ghost Likelihood",
-                      min = 0, max = 1, value = 0.5, step = 0.05),
-          br(),
-          uiOutput("flag_count_card")
-        )
-      ),
-      column(9, DTOutput("ghost_table"))
-    )
-  )
 )
 
 # server
@@ -358,10 +311,10 @@ server <- function(input, output, session) {
     x <- make_ghost_x(
       borough = input$ghost_borough,
       room_type = input$room_type_ghost,
-      accommodates = input$ghost_accommodates,
-      log_host_count = log1p(input$host_listings),
-      review_complete = input$ghost_review_score,
-      log_reviews = log1p(input$ghost_n_reviews)
+      accommodates = as.integer(input$ghost_accommodates),
+      log_host_count = log1p(as.numeric(input$host_listings)),
+      review_complete = as.numeric(input$ghost_review_score),
+      log_reviews = log1p(as.numeric(input$ghost_n_reviews))
     )
     predict_ghost(x)
   }, ignoreNULL = FALSE)
@@ -429,60 +382,6 @@ server <- function(input, output, session) {
     })
   }, res = 96)
 
-  flagged_data <- reactive({
-    d <- df_ghost %>%
-      filter(ghost_prob > input$tbl_prob_thresh) %>%
-      dplyr::select(
-        id, name,
-        borough = neighbourhood_group_cleansed,
-        neighbourhood = neighbourhood_cleansed,
-        room_type, price_num, availability_365,
-        reviews_per_month, number_of_reviews, ghost_prob
-      ) %>%
-      arrange(desc(ghost_prob))
-    if (input$tbl_borough != "All")
-      d <- filter(d, borough == input$tbl_borough)
-    d
-  })
-
-  output$flag_count_card <- renderUI({
-    n <- nrow(flagged_data())
-    div(class = "stat-box",
-      p(class = "stat-label", "Flagged Listings"),
-      p(class = "stat-value", n),
-      p(style = "font-size:0.78em; color:#8a9299; margin:4px 0 0 0;",
-        paste0("above ", scales::percent(input$tbl_prob_thresh, accuracy = 1), " likelihood threshold"))
-    )
-  })
-
-  output$ghost_table <- renderDT({
-    flagged_data() %>%
-      mutate(
-        ghost_prob = scales::percent(ghost_prob, accuracy = 0.1),
-        price_num = scales::dollar(price_num)
-      ) %>%
-      rename(
-        "ID" = id,
-        "Name" = name,
-        "Borough" = borough,
-        "Neighbourhood" = neighbourhood,
-        "Room Type" = room_type,
-        "Price" = price_num,
-        "Availability" = availability_365,
-        "Reviews/mo" = reviews_per_month,
-        "Total Reviews" = number_of_reviews,
-        "Ghost Likelihood" = ghost_prob
-      )
-  },
-  options = list(pageLength = 15, scrollX = TRUE, dom = "frtip", autoWidth = TRUE),
-  rownames = FALSE,
-  filter = "top"
-  )
-
-  output$dl_flagged <- downloadHandler(
-    filename = function() paste0("ghost_listings_", Sys.Date(), ".csv"),
-    content = function(file) write_csv(flagged_data(), file)
-  )
 }
 
 shinyApp(ui, server)
