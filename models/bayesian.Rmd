@@ -72,10 +72,9 @@ listing_x <- as.matrix(c(1, unlist(airbnb[1, c("availability_365", "minimum_nigh
                                                  "host_listings_count", "days_since_last_review",
                                                  "reviews_per_month", "price")])), ncol = 1)
 
-# Loop through posterior draws
 post_sigmoids <- c()
 for(i in 1:nrow(post_draws)){
-  w_tilde <- matrix(unlist(post_draws[i, 1:9]), ncol = 1)  # 9 = intercept + 8 predictors
+  w_tilde <- matrix(unlist(post_draws[i, 1:9]), ncol = 1)  
   post_sigmoids <- c(post_sigmoids, sigmoid(w_tilde, listing_x))
 }
 
@@ -89,12 +88,13 @@ airbnb$ghost_label[1]
 ```{r}
 # Effect of individual predictors
 plot(conditional_effects(airbnb_brm_normal, "availability_365"))
+plot(conditional_effects(airbnb_brm_normal, "minimum_nights"))
+plot(conditional_effects(airbnb_brm_normal, "host_has_profile_pic"))
+plot(conditional_effects(airbnb_brm_normal, "host_identity_verified"))
+plot(conditional_effects(airbnb_brm_normal, "host_listings_count"))
 plot(conditional_effects(airbnb_brm_normal, "days_since_last_review"))
+plot(conditional_effects(airbnb_brm_normal, "reviews_per_month"))
 plot(conditional_effects(airbnb_brm_normal, "price"))
-
-# Joint effects
-plot(conditional_effects(airbnb_brm_normal, "availability_365:minimum_nights"))
-plot(conditional_effects(airbnb_brm_normal, "days_since_last_review:reviews_per_month"))
 ```
 
 
